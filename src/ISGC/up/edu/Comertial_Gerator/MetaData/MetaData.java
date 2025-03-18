@@ -1,9 +1,12 @@
 package ISGC.up.edu.Comertial_Gerator.MetaData;
 
 import java.io.*;
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.*;
 
-public class MetaData {
+
+public class MetaData implements Meta{
 
     private static final String EXIFTOOL_COMMAND = "exiftool";
     private static MetaData instance; // Singleton instance
@@ -23,69 +26,89 @@ public class MetaData {
 
     /***************************************************/
 
-    public static Map<String, Map<String, String>> extractMetadataFromFiles(List<File> files) {
-        Map<String, Map<String, String>> allMetadata = new HashMap<>();
-
+    public static  String[][] metaData(List<File> files){
         System.out.println("=== EXTRACTING METADATA FROM " + files.size() + " FILES ===");
 
-        for (File file : files) {
-            Map<String, String> fileMetadata = new HashMap<>();
+        String[][] metaData = new String[files.size()][4];
+        //Name, path, creation date, rotation
+        int counter = 0;
+        for (File file : files) {   //For all the given files
+            //Extraction of name and path
             String filePath = file.getAbsolutePath();
             String fileName = file.getName();
+            String fileCreationDate = getFileCreationDate(file);
+            String fileRotation = getRotation(file);
 
-            // Add basic file information
-            fileMetadata.put("Name", fileName);
-            fileMetadata.put("Path", filePath);
-            fileMetadata.put("Creation Date", getFileCreationDate(file));
-            fileMetadata.put("Modification Date", new Date(file.lastModified()).toString());
 
-            // Get additional metadata using ExifTool
-            Map<String, String> exifMetadata = ExtraerMetadata(file);
-            // Merge the ExifTool metadata with our basic metadata
-            fileMetadata.putAll(exifMetadata);
+            String[] metaDataRow = new String[]{fileName,filePath,fileCreationDate,fileRotation};
+            metaData[counter] = metaDataRow;
 
-            // Store the metadata in the map
-            allMetadata.put(filePath, fileMetadata);
+            counter++;
 
-            // Print metadata to console
             System.out.println("\nMetadata for: " + fileName);
             System.out.println("----------------------------------------");
             System.out.println("Path: " + filePath);
-            System.out.println("Creation Date: " + fileMetadata.get("Creation Date"));
-            System.out.println("Modification Date: " + fileMetadata.get("Modification Date"));
-            System.out.println("Rotation: " + fileMetadata.getOrDefault("Rotation", "Not available"));
+            System.out.println("Creation Date: " + fileCreationDate);
+            System.out.println("Rotation: " + fileRotation);
             System.out.println("----------------------------------------");
+
         }
-
-        System.out.println("\n=== METADATA EXTRACTION COMPLETE ===\n");
-
-        return allMetadata;
+        metaData = order(metaData);
+        return metaData;
     }
 
-    public static Map<String, String> ExtraerMetadata(File archivo) {
-        Map<String, String> metadata = new HashMap<>();
-        String[] command = new String[]{"exiftool", archivo.getAbsolutePath()};
 
+    private static String[][] order(String[][] metaData) {
+        // Create a copy of the input array to avoid modifying the original
+        String[][] sortedMetaData = Arrays.copyOf(metaData, metaData.length);
+
+        // Sort the array based on the date in the second column (index 1)
+        Arrays.sort(sortedMetaData, (row1, row2) -> {
+            try {
+                // Parse ISO 8601 format dates using Instant
+                Instant date1 = Instant.parse(row1[1]);
+                Instant date2 = Instant.parse(row2[1]);
+
+                // Compare the dates
+                return date1.compareTo(date2);
+            } catch (DateTimeParseException e) {
+                // If parsing fails, compare as strings (fallback)
+                return row1[1].compareTo(row2[1]);
+            }
+        });
+
+        return sortedMetaData;
+    }
+
+
+
+    //This funtion retrives the rotation of the file metadata
+    private static String getRotation(File file) {
         try {
-            ProcessBuilder builder = new ProcessBuilder(command);
-            builder.redirectErrorStream(true);
-            Process process = builder.start();
+            // Execute ExifTool command to get the Orientation or Rotate metadata
+            ProcessBuilder pb = new ProcessBuilder("exiftool", "-Orientation", "-Rotate", file.getAbsolutePath());
+            Process process = pb.start();
 
-            BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             String line;
-            while ((line = br.readLine()) != null) {
-                System.out.println("[EXIF] " + line); // Debug: muestra la salida de exiftool
-                if (line.contains("Rotation")) {
-                    metadata.put("Rotation", line.substring(line.indexOf(":") + 1).trim());
-                } else if (line.contains("Create Date")) {
-                    metadata.put("Create Date", line.substring(line.indexOf(":") + 1).trim());
+            while ((line = reader.readLine()) != null) {
+                if (line.contains("Orientation")) {
+                    if (line.contains("180")) return "180";
+                    if (line.contains("90 CW")) return "90";
+                    if (line.contains("90 CCW")) return "270";
+                    if (line.contains("0") || line.contains("Normal")) return "0";
+                } else if (line.contains("Rotate")) {
+                    // Some files use "Rotate" instead of "Orientation"
+                    return line.split(":")[1].trim() + "°";
                 }
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return metadata;
+        return "0";
     }
+
+
 
     private static String getFileCreationDate(File file) {
         try {
@@ -100,23 +123,39 @@ public class MetaData {
         }
     }
 
-    public static void ejecutarProceso() {
-        String[] command = new String[]{"/bin/bash", "-c", "echo 'Procesando imágenes...' && sleep 1 && echo 'Generando video' && echo 'Proceso finalizado'"};
-        if (System.getProperty("os.name").toLowerCase().contains("win")) {
-            command = new String[]{"cmd.exe", "/c", "echo Procesando imágenes... && timeout /t 1 && echo Generando video && echo Proceso finalizado"};
+
+
+    public static void executeProcess() {
+        String[] command;
+        //Determines the operating sistem
+        if (System.getProperty("os.name").toLowerCase().contains("win")) {  //For windows
+            command = new String[]{"cmd.exe", "/c", "echo Procesando imagenes... && timeout /t 1 && echo Generando video && echo Proceso finalizado"};
+        } else {    //For Unix
+            command = new String[]{"/bin/bash", "-c", "echo 'Procesando imágenes...' && sleep 1 && echo 'Generando video' && echo 'Proceso finalizado'"};
         }
 
+        Process process = null;
+        BufferedReader reader = null;
         try {
-            ProcessBuilder builder = new ProcessBuilder(command);
-            Process process = builder.start();
-            BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            ProcessBuilder builder = new ProcessBuilder(command);   //Creates a class proces bulder and give it the command
+            process = builder.start();  //Runs the command
+            reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             String line;
-            while ((line = br.readLine()) != null) {
+            while ((line = reader.readLine()) != null) {
                 System.out.println(line);
             }
             System.out.println("Proceso finalizado con código: " + process.waitFor());
-        } catch (IOException | InterruptedException e) {
+        }
+        catch (IOException | InterruptedException e) {
             e.printStackTrace();
+        }
+        finally { //In every case do
+            try {
+                if (reader != null) reader.close();
+                if (process != null) process.destroy();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 
