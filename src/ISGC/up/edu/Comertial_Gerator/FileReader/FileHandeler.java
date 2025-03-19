@@ -1,22 +1,18 @@
 package ISGC.up.edu.Comertial_Gerator.FileReader;
 
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileReader;
-import java.io.FileNotFoundException;
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
 //This class is designed into a singleton pattern
 // This class is responsible for selecting files from a folder for usage.
-public class FileHandeler implements reader {
+public class FileHandeler implements Reader {
     private static FileHandeler instance;
-    private List<String> filter= new ArrayList<>();
+    private List<String> filter = new ArrayList<>();
     private String folderDir;
     private final List<BufferedReader> bufferedReaders = new ArrayList<>();
-    private final List<String> fileNames = new ArrayList<>(); // To store file names
-
+    private final List<File> files = new ArrayList<>(); // To store the File objects
 
     // Private constructor to prevent direct instantiation
     private FileHandeler() {
@@ -42,53 +38,45 @@ public class FileHandeler implements reader {
         this.filter = filters;
     }
 
-
     /*********************** STRUCTURE************************************/
 
-    //Class to read the user files
-    public void structure(String path){
-        //User entered file reader
+    // Class to read the user files
+    public void structure(String path) {
+        // User entered file reader
         System.out.println("User entered file structure");
-        setFilter(Arrays.asList(".png", ".jpg", ".mp4", ".mkv"));   //sets the filter
+        setFilter(Arrays.asList(".png", ".jpg", ".mp4", ".mkv"));   // sets the filter
         setFolderDir(path);
-        setFolderDir("C:/Users/josem/OneDrive/Imágenes/ComertialGenerator");    //REMOVE; TEST ONLY
-        TakeFiles();    //Puts the valid files of the folder in a lsit of buffer readers accesible in the class
-        printFiles();   //Prints the picked files in console
+        setFolderDir("C:/Users/josem/OneDrive/Imágenes/ComertialGenerator");    // REMOVE; TEST ONLY
+        TakeFiles();    // Puts the valid files of the folder in a list of buffer readers accessible in the class
+        printFiles();   // Prints the picked files in console
     }
-
-
 
     public void addReader(String fileName) {
         try {
-            FileReader fileReader = new FileReader(fileName);
+            File file = new File(fileName);
+            FileReader fileReader = new FileReader(file);
             bufferedReaders.add(new BufferedReader(fileReader));
-            fileNames.add(fileName);
+            files.add(file); // Store the corresponding file
         } catch (FileNotFoundException e) {
             System.out.println("File not found: " + fileName);
         }
     }
 
-
-
     // This function reads and selects the files in the folder based on the filter.
     public void TakeFiles() {
-
         if (folderDir == null || filter.isEmpty()) {  // Check if filters are set and there is a folder
             System.out.println("Folder directory or filters not set.");
             return;
         }
 
-        //Reading and creation of the folder in the program
+        // Reading and creation of the folder in the program
         File folder = new File(folderDir);
         if (!folder.exists() || !folder.isDirectory()) {
             System.out.println("Invalid directory path: " + folderDir);
             return;
         }
 
-
         System.out.println("The path is valid: " + folderDir);
-
-
 
         // Process the files
         File[] listOfFiles = folder.listFiles((dir, name) -> {
@@ -113,18 +101,24 @@ public class FileHandeler implements reader {
 
     // Prints the names of the selected files
     public void printFiles() {
-        if (fileNames.isEmpty()) {
+        if (files.isEmpty()) {
             System.out.println("No files selected.");
             return;
         }
 
         System.out.println("Selected Files:");
-        for (String fileName : fileNames) {
-            System.out.println(fileName);
+        for (File file : files) {
+            System.out.println(file.getAbsolutePath());
         }
     }
 
-    public List<BufferedReader> getFiles(){ //Funtion to get all the files
-        return bufferedReaders;
+    @Override
+    public List<BufferedReader> getFiles() {
+        return List.of();
+    }
+
+    // Function to get all the files stored
+    public List<File> getFilesList() {
+        return files; // Return the list of File objects
     }
 }
