@@ -26,7 +26,7 @@ public class MetaData implements Meta{
 
     /***************************************************/
 
-    public static  String[][] metaData(List<File> files){
+    public static  String[][] getMetaData(List<File> files){
         System.out.println("=== EXTRACTING METADATA FROM " + files.size() + " FILES ===");
 
         String[][] metaData = new String[files.size()][4];
@@ -62,18 +62,27 @@ public class MetaData implements Meta{
         // Create a copy of the input array to avoid modifying the original
         String[][] sortedMetaData = Arrays.copyOf(metaData, metaData.length);
 
-        // Sort the array based on the date in the second column (index 1)
+        // Sort the array based on the creation date (index 2)
         Arrays.sort(sortedMetaData, (row1, row2) -> {
             try {
+                // Ensure both rows are not null and have enough elements
+                if (row1 == null || row1.length < 3 || row2 == null || row2.length < 3) {
+                    return 0;
+                }
+
                 // Parse ISO 8601 format dates using Instant
-                Instant date1 = Instant.parse(row1[1]);
-                Instant date2 = Instant.parse(row2[1]);
+                Instant date1 = Instant.parse(row1[2]);
+                Instant date2 = Instant.parse(row2[2]);
 
                 // Compare the dates
                 return date1.compareTo(date2);
-            } catch (DateTimeParseException e) {
-                // If parsing fails, compare as strings (fallback)
-                return row1[1].compareTo(row2[1]);
+            } catch (DateTimeParseException | NullPointerException e) {
+                // If parsing fails, log the error and maintain original order
+                System.err.println("Error parsing date: " +
+                        (row1 != null ? row1[2] : "null") +
+                        " or " +
+                        (row2 != null ? row2[2] : "null"));
+                return 0;
             }
         });
 
@@ -85,28 +94,30 @@ public class MetaData implements Meta{
     //This funtion retrives the rotation of the file metadata
     private static String getRotation(File file) {
         try {
-            // Execute ExifTool command to get the Orientation or Rotate metadata
-            ProcessBuilder pb = new ProcessBuilder("exiftool", "-Orientation", "-Rotate", file.getAbsolutePath());
+            // Execute ExifTool command to get rotation-related metadata
+            ProcessBuilder pb = new ProcessBuilder(EXIFTOOL_COMMAND, "-Rotation", file.getAbsolutePath());
             Process process = pb.start();
 
             BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
             String line;
             while ((line = reader.readLine()) != null) {
-                if (line.contains("Orientation")) {
-                    if (line.contains("180")) return "180";
-                    if (line.contains("90 CW")) return "90";
-                    if (line.contains("90 CCW")) return "270";
-                    if (line.contains("0") || line.contains("Normal")) return "0";
-                } else if (line.contains("Rotate")) {
-                    // Some files use "Rotate" instead of "Orientation"
-                    return line.split(":")[1].trim() + "°";
+                // Look specifically for the Rotation line
+                if (line.contains("Rotation")) {
+                    // Extract the numeric value
+                    String[] parts = line.split(":");
+                    if (parts.length > 1) {
+                        String rotationValue = parts[1].trim();
+                        // Ensure we return a clean rotation value
+                        return rotationValue.replaceAll("[^0-9]", "");
+                    }
                 }
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return "0";
+        return "0";  // Default if no rotation information is found
     }
+
 
 
 
@@ -121,6 +132,38 @@ public class MetaData implements Meta{
             e.printStackTrace();
             return "Unknown";
         }
+    }
+
+    public static void printMetaDataList(String[][] metaData) {
+        if (metaData == null || metaData.length == 0) {
+            System.out.println("No metadata to display.");
+            return;
+        }
+
+        System.out.println("\n===== METADATA LIST =====");
+        System.out.println("----------------------------------------");
+        System.out.println("| # | File Name | Path | Creation Date | Rotation |");
+        System.out.println("----------------------------------------");
+
+        for (int i = 0; i < metaData.length; i++) {
+            String[] row = metaData[i];
+            if (row != null && row.length >= 4) {
+                System.out.printf("| %d | %s | %s | %s | %s |\n",
+                        i + 1,
+                        truncateString(row[0], 20),
+                        truncateString(row[1], 30),
+                        row[2],
+                        row[3]);
+            }
+        }
+
+        System.out.println("----------------------------------------");
+        System.out.println("Total files: " + metaData.length);
+    }
+
+    private static String truncateString(String str, int maxLength) {
+        if (str == null) return "";
+        return str.length() <= maxLength ? str : str.substring(0, maxLength - 3) + "...";
     }
 
 

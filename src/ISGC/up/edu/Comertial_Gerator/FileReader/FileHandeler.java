@@ -46,7 +46,6 @@ public class FileHandeler implements Reader {
         System.out.println("User entered file structure");
         setFilter(Arrays.asList(".png", ".jpg", ".mp4", ".mkv"));   // sets the filter
         setFolderDir(path);
-        setFolderDir("C:/Users/josem/OneDrive/Imágenes/ComertialGenerator");    // REMOVE; TEST ONLY
         TakeFiles();    // Puts the valid files of the folder in a list of buffer readers accessible in the class
         printFiles();   // Prints the picked files in console
     }
