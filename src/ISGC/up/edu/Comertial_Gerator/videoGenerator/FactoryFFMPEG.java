@@ -8,24 +8,131 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 
 public class FactoryFFMPEG {
     private static FactoryFFMPEG instance;
-    private Robot robot;
+    private List<String> createdFiles= new List<String>() {
+        @Override
+        public int size() {
+            return 0;
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return false;
+        }
+
+        @Override
+        public boolean contains(Object o) {
+            return false;
+        }
+
+        @Override
+        public Iterator<String> iterator() {
+            return null;
+        }
+
+        @Override
+        public Object[] toArray() {
+            return new Object[0];
+        }
+
+        @Override
+        public <T> T[] toArray(T[] a) {
+            return null;
+        }
+
+        @Override
+        public boolean add(String s) {
+            return false;
+        }
+
+        @Override
+        public boolean remove(Object o) {
+            return false;
+        }
+
+        @Override
+        public boolean containsAll(Collection<?> c) {
+            return false;
+        }
+
+        @Override
+        public boolean addAll(Collection<? extends String> c) {
+            return false;
+        }
+
+        @Override
+        public boolean addAll(int index, Collection<? extends String> c) {
+            return false;
+        }
+
+        @Override
+        public boolean removeAll(Collection<?> c) {
+            return false;
+        }
+
+        @Override
+        public boolean retainAll(Collection<?> c) {
+            return false;
+        }
+
+        @Override
+        public void clear() {
+
+        }
+
+        @Override
+        public String get(int index) {
+            return "";
+        }
+
+        @Override
+        public String set(int index, String element) {
+            return "";
+        }
+
+        @Override
+        public void add(int index, String element) {
+
+        }
+
+        @Override
+        public String remove(int index) {
+            return "";
+        }
+
+        @Override
+        public int indexOf(Object o) {
+            return 0;
+        }
+
+        @Override
+        public int lastIndexOf(Object o) {
+            return 0;
+        }
+
+        @Override
+        public ListIterator<String> listIterator() {
+            return null;
+        }
+
+        @Override
+        public ListIterator<String> listIterator(int index) {
+            return null;
+        }
+
+        @Override
+        public List<String> subList(int fromIndex, int toIndex) {
+            return List.of();
+        }
+    };
     private int width;
     private int height;
     private List<String> tempFiles = new ArrayList<>();
 
     private FactoryFFMPEG() {
-        try {
-            this.robot = new Robot();
-        } catch (AWTException e) {
-            e.printStackTrace();
-        }
         this.width = 1024;
         this.height = 768;
     }
@@ -43,6 +150,7 @@ public class FactoryFFMPEG {
         String outputPath = "img_" + UUID.randomUUID() + ".mp4";
         System.out.println("Generating video from: " + path);
         trackTempFile(outputPath);
+        createdFiles.add(outputPath);
 
         try {
             String[] command = {
@@ -71,6 +179,7 @@ public class FactoryFFMPEG {
         trackTempFile(tempFirstVideo);
         trackTempFile(tempSecondVideo);
         trackTempFile(tempListPath);
+        createdFiles.add(outputVideoPath);
 
         System.out.println("Concatenating: " + firstVideoPath + " and " + secondVideoPath);
         try {
@@ -94,6 +203,7 @@ public class FactoryFFMPEG {
         String outputPath = "reencoded_" + UUID.randomUUID() + ".mp4";
         System.out.println("Re-encoding video: " + inputPath + " to MP4 format");
         trackTempFile(outputPath);
+        createdFiles.add(outputPath);
 
         try {
             String[] command = {
@@ -126,6 +236,7 @@ public class FactoryFFMPEG {
     public File fillSides(String path) {
         String outputPath = "filled_" + UUID.randomUUID() + ".mp4";
         trackTempFile(outputPath);
+        createdFiles.add(outputPath);
 
         String[] command = {
                 "ffmpeg", "-i", path,
@@ -169,6 +280,94 @@ public class FactoryFFMPEG {
     public void cleanupAllTempFiles() {
         cleanup(tempFiles.toArray(new String[0]));
         tempFiles.clear();
+    }
+
+
+
+    public String createVideoGrid(List<String> videoPaths, int rows, int cols) {
+        // Validate inputs
+        if (videoPaths == null || videoPaths.isEmpty() || rows <= 0 || cols <= 0) {
+            System.err.println("Invalid input for video grid creation");
+            return null;
+        }
+
+        // Ensure we don't exceed available videos
+        int maxVideos = rows * cols;
+        List<String> gridVideos = videoPaths.subList(0, Math.min(videoPaths.size(), maxVideos));
+
+        // Pad with black videos if not enough videos
+        while (gridVideos.size() < maxVideos) {
+            gridVideos.add(createBlackVideo(width, height, 4)); // 4-second black video
+        }
+
+        String outputPath = "grid_" + UUID.randomUUID() + ".mp4";
+        trackTempFile(outputPath);
+
+        // Construct complex filter for grid layout
+        StringBuilder filterComplex = new StringBuilder();
+
+        // Input streams
+        for (int i = 0; i < gridVideos.size(); i++) {
+            filterComplex.append(String.format("[%d:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2[v%d];",
+                    i, width/cols, height/rows, width/cols, height/rows, i));
+        }
+
+        // Arrange grid
+        filterComplex.append("  ");
+        for (int i = 0; i < gridVideos.size(); i++) {
+            filterComplex.append(String.format("[v%d]", i));
+        }
+        filterComplex.append(String.format("xstack=inputs=%d:layout=%dx%d[v]",
+                gridVideos.size(), cols, rows));
+
+        // Prepare FFmpeg command
+        String[] command = {
+                "ffmpeg",
+                "-i", String.join(" -i ", gridVideos),
+                "-filter_complex", filterComplex.toString(),
+                "-map", "[v]",
+                "-c:v", "libx264",
+                "-preset", "medium",
+                "-r", "30",
+                "-pix_fmt", "yuv420p",
+                outputPath
+        };
+
+        try {
+            int exitCode = executeCommand(command);
+            return exitCode == 0 ? outputPath : null;
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    // Helper method to create a black video
+    private String createBlackVideo(int width, int height, int duration) {
+        String outputPath = "black_" + UUID.randomUUID() + ".mp4";
+        trackTempFile(outputPath);
+
+        String[] command = {
+                "ffmpeg",
+                "-f", "lavfi",
+                "-i", String.format("color=black:s=%dx%d:r=30", width, height),
+                "-t", String.valueOf(duration),
+                "-c:v", "libx264",
+                "-pix_fmt", "yuv420p",
+                outputPath
+        };
+
+        try {
+            int exitCode = executeCommand(command);
+            return exitCode == 0 ? outputPath : null;
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    public List<String> getCreatedFiles() {
+        return createdFiles;
     }
 
     public void cleanup(String... filePaths) {
