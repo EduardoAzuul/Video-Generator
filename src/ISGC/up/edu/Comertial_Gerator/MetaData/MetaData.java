@@ -1,6 +1,8 @@
 package ISGC.up.edu.Comertial_Gerator.MetaData;
 
 import java.io.*;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.*;
@@ -36,7 +38,7 @@ public class MetaData implements Meta{
             //Extraction of name and path
             String filePath = file.getAbsolutePath();
             String fileName = file.getName();
-            String fileCreationDate = getFileCreationDate(file);
+            String fileCreationDate = getFileCreationDate(filePath);
             String fileRotation = getRotation(file);
 
 
@@ -64,24 +66,59 @@ public class MetaData implements Meta{
 
         // Sort the array based on the creation date (index 2)
         Arrays.sort(sortedMetaData, (row1, row2) -> {
+            // Handle null or incomplete rows
+            if (row1 == null || row1.length < 3 || row2 == null || row2.length < 3) {
+                return 0;
+            }
+
+            // Check if either date is "Unknown"
+            if ("Unknown".equals(row1[2]) && "Unknown".equals(row2[2])) {
+                return 0;
+            }
+            if ("Unknown".equals(row1[2])) {
+                return 1;  // Unknown dates go to the end
+            }
+            if ("Unknown".equals(row2[2])) {
+                return -1;  // Unknown dates go to the end
+            }
+
             try {
-                // Ensure both rows are not null and have enough elements
-                if (row1 == null || row1.length < 3 || row2 == null || row2.length < 3) {
+                // Try parsing different date formats
+                SimpleDateFormat[] formats = {
+                        new SimpleDateFormat("yyyy:MM:dd HH:mm:ss"),  // ExifTool default format
+                        new SimpleDateFormat("yyyy-MM-dd HH:mm:ss"),
+                        new SimpleDateFormat("dd/MM/yyyy HH:mm:ss"),
+                        new SimpleDateFormat("MM/dd/yyyy HH:mm:ss")
+                };
+
+                Date date1 = null;
+                Date date2 = null;
+
+                // Try parsing with multiple formats
+                for (SimpleDateFormat format : formats) {
+                    try {
+                        date1 = format.parse(row1[2]);
+                        date2 = format.parse(row2[2]);
+                        break;  // If parsing succeeds, exit the loop
+                    } catch (ParseException e) {
+                        // Continue to next format
+                    }
+                }
+
+                // If no format worked, return 0 to maintain original order
+                if (date1 == null || date2 == null) {
+                    System.err.println("Could not parse dates: " + row1[2] + " or " + row2[2]);
                     return 0;
                 }
 
-                // Parse ISO 8601 format dates using Instant
-                Instant date1 = Instant.parse(row1[2]);
-                Instant date2 = Instant.parse(row2[2]);
-
                 // Compare the dates
                 return date1.compareTo(date2);
-            } catch (DateTimeParseException | NullPointerException e) {
-                // If parsing fails, log the error and maintain original order
-                System.err.println("Error parsing date: " +
-                        (row1 != null ? row1[2] : "null") +
-                        " or " +
-                        (row2 != null ? row2[2] : "null"));
+
+            } catch (Exception e) {
+                // Log any unexpected parsing errors
+                System.err.println("Unexpected error parsing dates: " +
+                        row1[2] + " or " + row2[2] +
+                        " - Error: " + e.getMessage());
                 return 0;
             }
         });
@@ -121,18 +158,52 @@ public class MetaData implements Meta{
 
 
 
-    private static String getFileCreationDate(File file) {
+    public static String getFileCreationDate(String path) {
         try {
-            java.nio.file.Path path = file.toPath();
-            java.nio.file.attribute.BasicFileAttributes attrs = java.nio.file.Files.readAttributes(
-                    path, java.nio.file.attribute.BasicFileAttributes.class);
+            // Array of possible date-related ExifTool tags to try
+            if (path == null){
+                return null;
+            }
 
-            return attrs.creationTime().toString();
-        } catch (IOException e) {
+            String[] dateTags = {
+                    "-CreateDate",
+                    "-DateTimeOriginal",
+                    "-ModifyDate",
+                    "-FileModifyDate"
+            };
+
+            for (String tag : dateTags) {       //Tries all the posible names for the creation date
+                String[] command = {
+                        "exiftool",
+                        tag,
+                        "-s3",
+                        path
+                };
+
+                Process process = Runtime.getRuntime().exec(command);
+                BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+                String dateValue = reader.readLine();
+
+                int exitCode = process.waitFor();
+
+                // Check if the date is valid (not empty, not 0000:00:00, not "Unknown")
+                if (exitCode == 0 &&
+                        dateValue != null &&
+                        !dateValue.trim().isEmpty() &&
+                        !dateValue.trim().equals("0000:00:00 00:00:00") &&
+                        !dateValue.trim().equalsIgnoreCase("Unknown")) {
+                    return dateValue.trim();
+                }
+            }
+
+            return "Unknown";
+        } catch (IOException | InterruptedException e) {
             e.printStackTrace();
             return "Unknown";
         }
     }
+
+
 
     public static void printMetaDataList(String[][] metaData) {
         if (metaData == null || metaData.length == 0) {

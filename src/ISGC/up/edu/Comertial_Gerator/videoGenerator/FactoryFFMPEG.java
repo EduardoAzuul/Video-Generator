@@ -1,142 +1,50 @@
 package ISGC.up.edu.Comertial_Gerator.videoGenerator;
 
-import java.awt.AWTException;
-import java.awt.Robot;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.UUID;
 
+/**
+ * A factory class for handling video processing operations using FFMPEG.
+ * Implements the Singleton pattern to ensure only one instance exists.
+ */
 public class FactoryFFMPEG {
+    // Singleton instance
     private static FactoryFFMPEG instance;
-    private List<String> createdFiles= new List<String>() {
-        @Override
-        public int size() {
-            return 0;
-        }
 
-        @Override
-        public boolean isEmpty() {
-            return false;
-        }
-
-        @Override
-        public boolean contains(Object o) {
-            return false;
-        }
-
-        @Override
-        public Iterator<String> iterator() {
-            return null;
-        }
-
-        @Override
-        public Object[] toArray() {
-            return new Object[0];
-        }
-
-        @Override
-        public <T> T[] toArray(T[] a) {
-            return null;
-        }
-
-        @Override
-        public boolean add(String s) {
-            return false;
-        }
-
-        @Override
-        public boolean remove(Object o) {
-            return false;
-        }
-
-        @Override
-        public boolean containsAll(Collection<?> c) {
-            return false;
-        }
-
-        @Override
-        public boolean addAll(Collection<? extends String> c) {
-            return false;
-        }
-
-        @Override
-        public boolean addAll(int index, Collection<? extends String> c) {
-            return false;
-        }
-
-        @Override
-        public boolean removeAll(Collection<?> c) {
-            return false;
-        }
-
-        @Override
-        public boolean retainAll(Collection<?> c) {
-            return false;
-        }
-
-        @Override
-        public void clear() {
-
-        }
-
-        @Override
-        public String get(int index) {
-            return "";
-        }
-
-        @Override
-        public String set(int index, String element) {
-            return "";
-        }
-
-        @Override
-        public void add(int index, String element) {
-
-        }
-
-        @Override
-        public String remove(int index) {
-            return "";
-        }
-
-        @Override
-        public int indexOf(Object o) {
-            return 0;
-        }
-
-        @Override
-        public int lastIndexOf(Object o) {
-            return 0;
-        }
-
-        @Override
-        public ListIterator<String> listIterator() {
-            return null;
-        }
-
-        @Override
-        public ListIterator<String> listIterator(int index) {
-            return null;
-        }
-
-        @Override
-        public List<String> subList(int fromIndex, int toIndex) {
-            return List.of();
-        }
-    };
+    // Video dimensions
     private int width;
     private int height;
-    private List<String> tempFiles = new ArrayList<>();
 
+    // List to track temporary files for cleanup
+    private List<String> tempFiles = new ArrayList<>();
+    private List<String> gridFiles = new ArrayList<>();
+
+    // Private constructor for Singleton pattern
     private FactoryFFMPEG() {
         this.width = 1024;
         this.height = 768;
     }
 
+    /* ======================== */
+    /* == Singleton Methods == */
+    /* ======================== */
+
+    /**
+     * Gets the singleton instance of FactoryFFMPEG with specified dimensions.
+     * If dimensions are invalid, keeps the default values.
+     *
+     * @param width  The desired width (positive value to update)
+     * @param height The desired height (positive value to update)
+     * @return The singleton instance
+     */
     public static synchronized FactoryFFMPEG getInstance(int width, int height) {
         if (instance == null) {
             instance = new FactoryFFMPEG();
@@ -146,11 +54,25 @@ public class FactoryFFMPEG {
         return instance;
     }
 
+    /**********************************************************************************************/
+    /**********************************************************************************************/
+                /* ======================== */
+                /* == Core FFMPEG Methods == */
+                /* ======================== */
+
+    /**
+     * Converts an image to a video file with specified dimensions.
+     *
+     * @param path   Path to the input image
+     * @param width  Output video width
+     * @param height Output video height
+     * @return Path to the generated video, or null if failed
+     */
     public String imageToVideo(String path, int width, int height) {
         String outputPath = "img_" + UUID.randomUUID() + ".mp4";
         System.out.println("Generating video from: " + path);
         trackTempFile(outputPath);
-        createdFiles.add(outputPath);
+        trackGridFiles(outputPath);
 
         try {
             String[] command = {
@@ -171,7 +93,18 @@ public class FactoryFFMPEG {
         }
     }
 
+
+    /**
+     * Concatenates two video files into one output file.
+     *
+     * @param firstVideoPath   Path to the first video
+     * @param secondVideoPath  Path to the second video
+     * @param outputVideoPath  Path for the output video
+     * @return Path to the concatenated video, or null if failed
+     */
     public String concatenateVideosPath(String firstVideoPath, String secondVideoPath, String outputVideoPath) {
+        // Solo agregamos archivos que no son concatenados a filesForGrid
+
         String tempFirstVideo = "temp_first_" + UUID.randomUUID() + ".mp4";
         String tempSecondVideo = "temp_second_" + UUID.randomUUID() + ".mp4";
         String tempListPath = "concat_list_" + UUID.randomUUID() + ".txt";
@@ -179,10 +112,11 @@ public class FactoryFFMPEG {
         trackTempFile(tempFirstVideo);
         trackTempFile(tempSecondVideo);
         trackTempFile(tempListPath);
-        createdFiles.add(outputVideoPath);
 
         System.out.println("Concatenating: " + firstVideoPath + " and " + secondVideoPath);
+
         try {
+            // Re-encode both videos to ensure compatibility
             String[] command1 = {"ffmpeg", "-i", firstVideoPath, "-c:v", "libx264", "-c:a", "aac", tempFirstVideo};
             String[] command2 = {"ffmpeg", "-i", secondVideoPath, "-c:v", "libx264", "-c:a", "aac", tempSecondVideo};
 
@@ -190,8 +124,19 @@ public class FactoryFFMPEG {
                 return null;
             }
 
-            Files.write(Paths.get(tempListPath), Arrays.asList("file '" + tempFirstVideo + "'", "file '" + tempSecondVideo + "'"));
-            String[] concatCommand = {"ffmpeg", "-f", "concat", "-safe", "0", "-i", tempListPath, "-c", "copy", outputVideoPath};
+            // Create concatenation list file
+            Files.write(Paths.get(tempListPath),
+                    Arrays.asList("file '" + tempFirstVideo + "'", "file '" + tempSecondVideo + "'"));
+
+            // Execute concatenation command
+            String[] concatCommand = {
+                    "ffmpeg", "-f", "concat",
+                    "-safe", "0",
+                    "-i", tempListPath,
+                    "-c", "copy",
+                    outputVideoPath
+            };
+
             return executeCommand(concatCommand) == 0 ? outputVideoPath : null;
         } catch (IOException | InterruptedException e) {
             e.printStackTrace();
@@ -199,11 +144,19 @@ public class FactoryFFMPEG {
         }
     }
 
+
+    /**
+     * Re-encodes a video file to standard MP4 format.
+     *
+     * @param inputPath Path to the input video
+     * @return Path to the re-encoded video, or null if failed
+     */
     public String reEncoder(String inputPath) {
-        String outputPath = "reencoded_" + UUID.randomUUID() + ".mp4";
+        String outputPath = "reencoded_" + UUID.randomUUID() + ".mp4";              //Generates a unique output path
         System.out.println("Re-encoding video: " + inputPath + " to MP4 format");
         trackTempFile(outputPath);
-        createdFiles.add(outputPath);
+        trackGridFiles(outputPath);
+
 
         try {
             String[] command = {
@@ -233,35 +186,30 @@ public class FactoryFFMPEG {
         }
     }
 
-    public File fillSides(String path) {
-        String outputPath = "filled_" + UUID.randomUUID() + ".mp4";
-        trackTempFile(outputPath);
-        createdFiles.add(outputPath);
+    /* ======================== */
+    /* == Utility Methods == */
+    /* ======================== */
 
-        String[] command = {
-                "ffmpeg", "-i", path,
-                "-vf", "pad=width=1280:height=720:x=(ow-iw)/2:y=(oh-ih)/2:color=black",
-                "-c:v", "libx264",
-                outputPath
-        };
-        try {
-            return executeCommand(command) == 0 ? new File(outputPath) : null;
-        } catch (IOException | InterruptedException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
+    /**
+     * Executes a system command and returns the exit code.
+     *
+     * @param command The command and arguments to execute
+     * @return Exit code of the process (0 for success)
+     * @throws IOException If an I/O error occurs
+     * @throws InterruptedException If the process is interrupted
+     */
     int executeCommand(String[] command) throws IOException, InterruptedException {
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.redirectErrorStream(true);
         Process process = builder.start();
+
+        // Read and discard output (uncomment to debug)
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                //System.out.println(line);
+            while (reader.readLine() != null) {
+                // Uncomment to see FFMPEG output: System.out.println(line);
             }
         }
+
         int exitCode = process.waitFor();
         if (exitCode != 0) {
             System.err.println("Error executing command: " + String.join(" ", command));
@@ -269,107 +217,144 @@ public class FactoryFFMPEG {
         return exitCode;
     }
 
-    // Track temporary files
+    /**
+     * Tracks a temporary file for automatic cleanup.
+     * this funtion adds the created files to a list of files made
+     */
     private void trackTempFile(String filePath) {
         if (filePath != null && !filePath.isEmpty()) {
             tempFiles.add(filePath);
         }
     }
 
-    // Public method to clean up all temporary files
+    private void trackGridFiles(String filePath) {
+        if (filePath != null && !filePath.isEmpty()) {
+            gridFiles.add(filePath);
+        }
+    }
+
+
+    public String gridVideo(String outputPath) {
+        if (gridFiles == null || gridFiles.isEmpty()) {
+            System.err.println("No valid files in filesForGrid to create grid video.");
+            return null;
+        }
+
+        int maxDuration = 8; // Maximum duration in seconds
+        int fileCount = gridFiles.size();
+
+        // Calculate optimal grid layout
+        int columns = (int) Math.ceil(Math.sqrt(fileCount));
+        int rows = (int) Math.ceil((double)fileCount / columns);
+
+        // Ensure reasonable aspect ratio (at least 1:2)
+        if ((double)width/height > 2.0) {
+            columns = Math.min(columns * 2, fileCount);
+            rows = (int) Math.ceil((double)fileCount / columns);
+        }
+
+        // Calculate cell dimensions
+        int cellWidth = width / columns;
+        int cellHeight = height / rows;
+
+        StringBuilder command = new StringBuilder("ffmpeg ");
+        StringBuilder filterComplex = new StringBuilder();
+        int counter = 0;
+
+        // Process input files
+        for (String file : gridFiles) {
+            File videoFile = new File(file);
+            if (videoFile.exists()) {
+                command.append("-i \"").append(file).append("\" ");
+                filterComplex.append("[")
+                        .append(counter)
+                        .append(":v] trim=end=").append(maxDuration)
+                        .append(",setpts=PTS-STARTPTS, scale=")
+                        .append(cellWidth).append(":").append(cellHeight)
+                        .append(":force_original_aspect_ratio=increase")
+                        .append(",crop=").append(cellWidth).append(":").append(cellHeight)
+                        .append(" [a").append(counter).append("]; ");
+                counter++;
+            }
+        }
+
+        if (counter == 0) {
+            System.err.println("No valid files found in filesForGrid.");
+            return null;
+        }
+
+        // Build grid layout positions
+        StringBuilder layout = new StringBuilder();
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < columns; c++) {
+                int index = r * columns + c;
+                if (index < counter) {
+                    layout.append(c * cellWidth).append("_").append(r * cellHeight);
+                    if (index < counter - 1) {
+                        layout.append("|");
+                    }
+                }
+            }
+        }
+
+        // Build xstack inputs
+        StringBuilder xstackInputs = new StringBuilder();
+        for (int i = 0; i < counter; i++) {
+            xstackInputs.append("[a").append(i).append("]");
+        }
+
+        // Construct filter chain
+        filterComplex.append(xstackInputs.toString())
+                .append("xstack=inputs=").append(counter)
+                .append(":layout=").append(layout.toString())
+                .append("[grid]; ")
+                .append("[grid]scale=").append(width).append(":").append(height)
+                .append("[final]");
+
+        command.append("-filter_complex \"")
+                .append(filterComplex)
+                .append("\" -map \"[final]\" ")
+                .append("-c:v libx264 -preset fast -t ").append(maxDuration)
+                .append(" -f mp4 \"")
+                .append(outputPath).append("\"");
+
+        System.out.println("Executing FFmpeg command: " + command);
+
+        try {
+            ProcessBuilder processBuilder = new ProcessBuilder(command.toString().split(" "));
+            processBuilder.inheritIO();
+            Process process = processBuilder.start();
+            int exitCode = process.waitFor();
+            if (exitCode == 0) {
+                System.out.println("Video grid created successfully at " + outputPath);
+                return outputPath;
+            } else {
+                System.err.println("FFmpeg process failed with exit code: " + exitCode);
+                return null;
+            }
+        } catch (IOException | InterruptedException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    /* ======================== */
+    /* == Cleanup Methods == */
+    /* ======================== */
+
+    /**
+     * Cleans up all tracked temporary files.
+     */
     public void cleanupAllTempFiles() {
         cleanup(tempFiles.toArray(new String[0]));
         tempFiles.clear();
     }
 
-
-
-    public String createVideoGrid(List<String> videoPaths, int rows, int cols) {
-        // Validate inputs
-        if (videoPaths == null || videoPaths.isEmpty() || rows <= 0 || cols <= 0) {
-            System.err.println("Invalid input for video grid creation");
-            return null;
-        }
-
-        // Ensure we don't exceed available videos
-        int maxVideos = rows * cols;
-        List<String> gridVideos = videoPaths.subList(0, Math.min(videoPaths.size(), maxVideos));
-
-        // Pad with black videos if not enough videos
-        while (gridVideos.size() < maxVideos) {
-            gridVideos.add(createBlackVideo(width, height, 4)); // 4-second black video
-        }
-
-        String outputPath = "grid_" + UUID.randomUUID() + ".mp4";
-        trackTempFile(outputPath);
-
-        // Construct complex filter for grid layout
-        StringBuilder filterComplex = new StringBuilder();
-
-        // Input streams
-        for (int i = 0; i < gridVideos.size(); i++) {
-            filterComplex.append(String.format("[%d:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2[v%d];",
-                    i, width/cols, height/rows, width/cols, height/rows, i));
-        }
-
-        // Arrange grid
-        filterComplex.append("  ");
-        for (int i = 0; i < gridVideos.size(); i++) {
-            filterComplex.append(String.format("[v%d]", i));
-        }
-        filterComplex.append(String.format("xstack=inputs=%d:layout=%dx%d[v]",
-                gridVideos.size(), cols, rows));
-
-        // Prepare FFmpeg command
-        String[] command = {
-                "ffmpeg",
-                "-i", String.join(" -i ", gridVideos),
-                "-filter_complex", filterComplex.toString(),
-                "-map", "[v]",
-                "-c:v", "libx264",
-                "-preset", "medium",
-                "-r", "30",
-                "-pix_fmt", "yuv420p",
-                outputPath
-        };
-
-        try {
-            int exitCode = executeCommand(command);
-            return exitCode == 0 ? outputPath : null;
-        } catch (IOException | InterruptedException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    // Helper method to create a black video
-    private String createBlackVideo(int width, int height, int duration) {
-        String outputPath = "black_" + UUID.randomUUID() + ".mp4";
-        trackTempFile(outputPath);
-
-        String[] command = {
-                "ffmpeg",
-                "-f", "lavfi",
-                "-i", String.format("color=black:s=%dx%d:r=30", width, height),
-                "-t", String.valueOf(duration),
-                "-c:v", "libx264",
-                "-pix_fmt", "yuv420p",
-                outputPath
-        };
-
-        try {
-            int exitCode = executeCommand(command);
-            return exitCode == 0 ? outputPath : null;
-        } catch (IOException | InterruptedException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    public List<String> getCreatedFiles() {
-        return createdFiles;
-    }
-
+    /**
+     * Deletes specified files and removes them from tracking.
+     *
+     * @param filePaths Varargs of file paths to delete
+     */
     public void cleanup(String... filePaths) {
         for (String path : filePaths) {
             if (path != null) {
@@ -378,7 +363,7 @@ public class FactoryFFMPEG {
                     if (file.exists()) {
                         boolean deleted = file.delete();
                         if (!deleted) {
-                            file.deleteOnExit(); // Fallback to delete on JVM exit
+                            file.deleteOnExit();
                             System.out.println("Could not delete temp file immediately, marked for deletion on exit: " + path);
                         } else {
                             System.out.println("Successfully deleted temp file: " + path);
@@ -388,8 +373,6 @@ public class FactoryFFMPEG {
                     System.err.println("Error deleting " + path + ": " + e.getMessage());
                     e.printStackTrace();
                 }
-
-                // Remove from tracking list if present
                 tempFiles.remove(path);
             }
         }

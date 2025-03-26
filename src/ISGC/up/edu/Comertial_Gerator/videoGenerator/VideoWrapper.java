@@ -12,8 +12,11 @@ import java.util.UUID;
 public class VideoWrapper {
     private static VideoWrapper instance;
     private final FactoryFFMPEG factoryFFMPEG;
+
+    //Data for the final video
     private final int width;
     private final int height;
+
     private List<String> tempFilesPaths = new ArrayList<>();
     private List<String> generatedMp4Files = new ArrayList<>(); // Track only generated MP4 files
 
@@ -29,6 +32,7 @@ public class VideoWrapper {
         }
         return instance;
     }
+    /*****************************/
 
     public String createVideoFromMediaArray(String[][] mediaDataList, String outputPath) {
         if (mediaDataList == null || mediaDataList.length == 0) {
@@ -47,7 +51,7 @@ public class VideoWrapper {
                 }
 
                 String filePath = mediaItem[1];
-                int rotation = 0;
+                int rotation = 0;   //Set rotation form the specified on array[][]
                 if (mediaItem.length > 3 && mediaItem[3] != null && !mediaItem[3].isEmpty()) {
                     try {
                         rotation = Integer.parseInt(mediaItem[3]);
@@ -72,7 +76,27 @@ public class VideoWrapper {
                 return null;
             }
 
+
+            //Files have been processed, now the factory will make the grid
+            System.out.println("Making the grid");
+            String grid = factoryFFMPEG.gridVideo("C:/Users/josem/OneDrive/Imágenes/ComertialGenerator/Grid.mp4");
+            //now the file will concatenate the videos, not taking in consideration the grid yet
             finalOutput = concatenateAllVideos(processedFiles, outputPath);
+
+            if(grid != null) {
+                System.out.println("Final concatenation with grid in process");
+
+                finalOutput = factoryFFMPEG.concatenateVideosPath(finalOutput, grid, "C:/Users/josem/OneDrive/Imágenes/ComertialGenerator/outputVideo.mp4");
+                factoryFFMPEG.cleanup(grid);
+                factoryFFMPEG.cleanup(finalOutput);
+            }
+            else{
+                System.out.println("No GRID WAS GENERATED.");
+            }
+
+            System.out.println("Concatenation completed :) ");
+
+
             return finalOutput;
 
         } catch (Exception e) {
@@ -86,14 +110,7 @@ public class VideoWrapper {
                 generatedMp4Files.remove(finalOutput);
             }
             // Create grid only from generated MP4 files
-            if (!generatedMp4Files.isEmpty()) {
-                String grid = Grid();
-                if (grid != null) {
-                    factoryFFMPEG.concatenateVideosPath(outputPath, grid, outputPath);
-                    tempFilesPaths.add(grid); // Ensure grid is cleaned up later
-                }
-            }
-            cleanup();
+
         }
     }
 
@@ -201,9 +218,7 @@ public class VideoWrapper {
         }
     }
 
-    private String Grid(){
-        return factoryFFMPEG.createVideoGrid(factoryFFMPEG.getCreatedFiles(), 4, 4);
-    }
+
 
     private String concatenateAllVideos(List<String> videoPaths, String outputPath) {
         String listFilePath = "concat_list_" + UUID.randomUUID() + ".txt";

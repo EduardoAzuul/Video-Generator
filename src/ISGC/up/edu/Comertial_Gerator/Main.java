@@ -14,10 +14,11 @@ public class Main {
         FileHandeler fh = FileHandeler.getInstance();
         fh.structure("C:/Users/josem/OneDrive/Imágenes/ComertialGenerator");    //This needs to be changed for the actual Path
         MetaData mData = MetaData.getInstance();
-        //mData.extractMetadataFromFiles(fh.getFilesList());
         String[][] metaData = mData.getMetaData(fh.getFilesList());
 
+
         MetaData.printMetaDataList(metaData);
+
 
         /*ChatAPIHandler chatAPI = new ChatAPIHandler();
         String userMessage = "tell me about the cold war";
@@ -25,6 +26,7 @@ public class Main {
         System.out.println("API Response: " + apiResponse);
         String imageUrl = chatAPI.generateImageFromPrompt("perros felices", 1024, 1024);
         System.out.println(imageUrl);*/
+
 
         //VideoModifier videoModifier = VideoModifier.getInstance(1080,720);
         VideoWrapper wrapper = VideoWrapper.getInstance(1080,720);
